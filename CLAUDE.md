@@ -1,8 +1,38 @@
-# CLAUDE.md
+# N8N Project Documentation
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This repository contains a simplified n8n automation platform deployment with AWS infrastructure provisioning via Terraform.
 
-## Quick Start
+## Project Overview
+
+This project provides:
+- **Simplified n8n Docker setup** with PostgreSQL database
+- **AWS Infrastructure** provisioned via Terraform
+- **Production-ready deployment** on AWS EC2 with Application Load Balancer
+- **SSL/TLS termination** and domain routing
+- **Secure private subnet deployment** with optional bastion host access
+
+## Architecture
+
+```
+Internet → ALB (HTTPS) → EC2 (Private Subnet) → n8n + PostgreSQL (Docker)
+                                     ↑
+                              Bastion Host (Optional)
+```
+
+### Infrastructure Components:
+- **VPC**: Custom VPC with public/private subnets
+- **ALB**: Application Load Balancer with SSL termination
+- **EC2**: Ubuntu 24.04 LTS instance in private subnet
+- **Route53**: DNS records for domain routing
+- **Security Groups**: Properly configured network access
+- **Bastion Host**: Optional SSH access to private instances
+
+### Application Stack:
+- **n8n**: Main automation platform (official Docker image)
+- **PostgreSQL**: Database for workflow and execution data
+- **Docker Compose**: Container orchestration
+
+## Quick Start (Local Development)
 
 1. Generate security keys:
 ```bash
@@ -127,9 +157,207 @@ docker compose down -v
 docker compose up -d
 ```
 
-## Security Notes
+## AWS Production Deployment
 
-- This simplified setup is intended for development/testing
-- Uses HTTP instead of HTTPS (suitable for private networks)
-- For production use, enable HTTPS and use proper domain configuration
-- Always use strong, unique passwords and encryption keys
+### Prerequisites
+
+1. **AWS CLI configured** with appropriate permissions
+2. **Terraform installed** (>= 1.0)
+3. **Domain registered** with Route53 hosted zone
+4. **SSL certificate** issued via AWS Certificate Manager
+5. **SSH key pair** created in AWS EC2
+
+### Step 1: Update Terraform Configuration
+
+1. **Update domain configuration** in `main.tf`:
+```hcl
+locals {
+  n8n_domain    = "your-domain.com"  # Update with your domain
+  key_pair_name = "your-key-pair"    # Update with your SSH key pair name
+}
+```
+
+2. **Update Route53 zone** in `main.tf`:
+```hcl
+data "aws_route53_zone" "main" {
+  name         = "your-domain.com"  # Update with your domain
+  private_zone = false
+}
+```
+
+3. **Update ACM certificate** reference in `main.tf`:
+```hcl
+data "aws_acm_certificate" "wildcard_cert" {
+  domain      = "your-domain.com"   # Update with your domain
+  statuses    = ["ISSUED"]
+  most_recent = true
+  types       = ["AMAZON_ISSUED"]
+}
+```
+
+### Step 2: Deploy Infrastructure
+
+1. **Initialize Terraform**:
+```bash
+terraform init
+```
+
+2. **Plan the deployment**:
+```bash
+terraform plan
+```
+
+3. **Apply the infrastructure**:
+```bash
+terraform apply
+```
+
+4. **Note the outputs** - save the bastion host IP and n8n instance details.
+
+### Step 3: Deploy Application
+
+1. **Connect to the n8n instance** via bastion host:
+```bash
+# SSH to bastion host first
+ssh -i your-key.pem ubuntu@<bastion-ip>
+
+# From bastion, SSH to n8n instance
+ssh ubuntu@<n8n-instance-private-ip>
+```
+
+2. **Install Docker and Docker Compose** on the n8n instance:
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker ubuntu
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Logout and login again for group changes
+exit
+# SSH back in
+```
+
+3. **Clone the project repository**:
+```bash
+git clone <your-repository-url>
+cd n8n-project/n8n
+```
+
+4. **Generate security keys**:
+```bash
+# Generate PostgreSQL password
+openssl rand -base64 32
+
+# Generate n8n encryption key
+openssl rand -hex 16
+```
+
+5. **Update environment configuration**:
+```bash
+# Edit .env file
+nano .env
+
+# Update these values:
+POSTGRES_PASSWORD=<your-generated-password>
+N8N_ENCRYPTION_KEY=<your-generated-key>
+N8N_HOST=<your-domain>  # e.g., n8n.yourdomain.com
+```
+
+6. **Start the application**:
+```bash
+docker-compose up -d
+```
+
+7. **Verify deployment**:
+```bash
+# Check container status
+docker-compose ps
+
+# Check logs
+docker-compose logs n8n
+docker-compose logs postgres
+```
+
+### Step 4: Access n8n
+
+1. **Wait for health checks** - Allow 2-3 minutes for the ALB health checks to pass
+2. **Access n8n** at `https://your-domain.com`
+3. **Create admin user** when prompted
+
+### Monitoring and Troubleshooting
+
+#### Check Application Status:
+```bash
+# Check container status
+docker-compose ps
+
+# View logs
+docker-compose logs -f n8n
+docker-compose logs -f postgres
+
+# Check ALB target health
+aws elbv2 describe-target-health --target-group-arn <target-group-arn>
+```
+
+#### Common Issues:
+
+1. **Health check failures**:
+   - Ensure n8n is running: `docker-compose ps`
+   - Check n8n logs: `docker-compose logs n8n`
+   - Verify port 5678 is accessible: `curl http://localhost:5678/healthz`
+
+2. **Database connection errors**:
+   - Check PostgreSQL logs: `docker-compose logs postgres`
+   - Verify database credentials in `.env`
+
+3. **SSL/HTTPS issues**:
+   - Verify ACM certificate is issued and valid
+   - Check Route53 DNS records are pointing to ALB
+   - Ensure domain matches the certificate
+
+#### Updating the Application:
+```bash
+# Pull latest changes
+git pull
+
+# Restart containers
+docker-compose down && docker-compose up -d
+```
+
+### Security Considerations
+
+- **Private Subnet**: EC2 instance is deployed in private subnet for security
+- **Bastion Host**: Provides secure SSH access to private instances
+- **SSL Termination**: HTTPS enforced at ALB level
+- **Security Groups**: Restrictive firewall rules
+- **Environment Variables**: Sensitive data stored in `.env` file
+
+### Scaling and Performance
+
+- **Instance Type**: Default is `t3.large` - adjust based on workload
+- **Storage**: Default 50GB GP3 volume - increase if needed
+- **Database**: PostgreSQL runs on same instance - consider RDS for production scale
+- **Health Checks**: Configured for reliability with appropriate timeouts
+
+### Backup Strategy
+
+1. **Database Backups**: 
+```bash
+# Manual backup
+docker-compose exec postgres pg_dump -U n8n n8n > backup.sql
+```
+
+2. **Volume Backups**:
+```bash
+# Backup n8n data
+sudo tar -czf n8n-backup.tar.gz /var/lib/docker/volumes/
+```
+
+3. **Automated Backups**: Consider AWS Backup service for EBS volumes
