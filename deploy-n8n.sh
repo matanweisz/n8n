@@ -1,9 +1,7 @@
 #!/bin/bash
-
 # =============================================================================
 # N8N AWS Deployment Script
 # =============================================================================
-
 set -e # Exit on any error
 
 echo "🚀 Starting N8N deployment on AWS EC2..."
@@ -40,22 +38,20 @@ else
     echo "✅ Docker Compose already installed"
 fi
 
-# Generate security keys if .env doesn't exist or keys are placeholder values
-if [ ! -f .env ] || grep -q "your-secure-postgres-password-here" .env; then
-    echo "🔐 Generating security keys..."
+# Create .env file from example
+echo "📝 Creating .env file..."
+cp .env.example .env
 
-    # Generate secure passwords
-    POSTGRES_PASSWORD=$(openssl rand -base64 32)
-    N8N_ENCRYPTION_KEY=$(openssl rand -hex 16)
+# Generate and replace security keys
+echo "🔐 Generating security keys..."
+POSTGRES_PASSWORD=$(openssl rand -base64 32)
+N8N_ENCRYPTION_KEY=$(openssl rand -hex 16)
 
-    # Update .env file
-    sed -i "s/your-secure-postgres-password-here/$POSTGRES_PASSWORD/" .env
-    sed -i "s/your-n8n-encryption-key-here/$N8N_ENCRYPTION_KEY/" .env
+# Use | as delimiter to avoid issues with special characters
+sed -i "s|your-secure-postgres-password-here|${POSTGRES_PASSWORD}|g" .env
+sed -i "s|your-n8n-encryption-key-here|${N8N_ENCRYPTION_KEY}|g" .env
 
-    echo "✅ Security keys generated and updated in .env file"
-else
-    echo "✅ .env file already configured"
-fi
+echo "✅ Security keys generated and updated in .env file"
 
 # Start Docker service
 echo "🔄 Starting Docker service..."
@@ -65,3 +61,6 @@ sudo systemctl start docker
 # Start N8N services
 echo "🎯 Starting N8N services..."
 sudo docker compose up -d
+
+echo "✅ N8N deployment completed!"
+echo "Access N8N at: https://n8n.matanweisz.xyz"
