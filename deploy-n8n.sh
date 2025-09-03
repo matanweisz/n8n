@@ -57,70 +57,11 @@ else
     echo "✅ .env file already configured"
 fi
 
-# Check if user needs to be added to docker group
-if ! groups $USER | grep -q docker; then
-    echo "👤 Adding user to docker group..."
-    echo "⚠️  You'll need to log out and log back in for group changes to take effect"
-    echo "⚠️  After logging back in, run this script again to continue"
-    exit 0
-fi
-
 # Start Docker service
 echo "🔄 Starting Docker service..."
 sudo systemctl enable docker
 sudo systemctl start docker
 
-# Check if Docker is working
-if ! docker ps &>/dev/null; then
-    echo "❌ Docker is not running properly. Please check the installation."
-    exit 1
-fi
-
 # Start N8N services
 echo "🎯 Starting N8N services..."
-docker-compose down 2>/dev/null || true # Stop if already running
-docker-compose pull                     # Pull latest images
-docker-compose up -d
-
-# Wait for services to start
-echo "⏳ Waiting for services to start..."
-sleep 30
-
-# Check service status
-echo "🔍 Checking service status..."
-if docker-compose ps | grep -q "Up"; then
-    echo "✅ N8N services are running!"
-
-    # Show service status
-    docker-compose ps
-
-    echo ""
-    echo "🎉 N8N deployment completed successfully!"
-    echo ""
-    echo "📋 Next steps:"
-    echo "  1. Ensure your ALB health checks pass (may take 2-3 minutes)"
-    echo "  2. Access N8N at your configured domain"
-    echo "  3. Create your admin user account"
-    echo ""
-    echo "🔧 Useful commands:"
-    echo "  - Check logs: docker-compose logs -f n8n"
-    echo "  - Check status: docker-compose ps"
-    echo "  - Restart services: docker-compose restart"
-    echo "  - Stop services: docker-compose down"
-    echo ""
-    echo "🌐 Health check URL: http://localhost:5678/healthz"
-
-    # Test health check
-    sleep 10
-    if curl -s http://localhost:5678/healthz >/dev/null; then
-        echo "✅ Health check passed - N8N is responding correctly!"
-    else
-        echo "⚠️  Health check failed - check logs with: docker-compose logs n8n"
-    fi
-
-else
-    echo "❌ Services failed to start properly. Check logs:"
-    docker-compose logs
-    exit 1
-fi
-
+sudo docker compose up -d
