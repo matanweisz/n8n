@@ -10,10 +10,10 @@ docker network create shark
 docker compose up -d
 
 # View logs for specific services
-docker-compose logs n8n-autoscaler
-docker-compose logs n8n-main
+docker-compose logs n8n
+docker-compose logs n8n-worker
 
-# Monitor Redis queue (for testing autoscaler)
+# Monitor Redis queue
 docker-compose exec redis redis-cli LLEN bull:jobs:wait
 docker-compose exec redis redis-cli LLEN bull:jobs:waiting
 
@@ -21,10 +21,10 @@ docker-compose exec redis redis-cli LLEN bull:jobs:waiting
 docker-compose ps
 docker-compose exec redis redis-cli ping
 
-# Restart autoscaler after code changes
-docker-compose restart n8n-autoscaler
+# Restart services after changes
+docker-compose restart n8n
 
-# Scale workers manually (for testing)
+# Scale workers manually
 docker-compose up -d --scale n8n-worker=3
 
 # Stop and clean up
@@ -33,48 +33,39 @@ docker-compose down
 
 ## Architecture Overview
 
-This is a **microservices-based n8n autoscaling system** using Docker Compose. The core architecture:
+This is a **production-ready n8n system** using Docker Compose with queue-based execution. The core architecture:
 
 ```
-n8n Main (Web UI) ←→ Redis Queue ←→ n8n Workers (Auto-scaled)
+n8n Main (Web UI) ←→ Redis Queue ←→ n8n Workers (2 replicas)
       ↓                    ↑              ↑
-PostgreSQL           Autoscaler    Redis Monitor
-      ↓                    ↓              ↓
-Cloudflared ←→ Traefik (Load Balancer) ←→ External Access
+PostgreSQL                              n8n Webhook
+      ↓
+ALB (Load Balancer) ←→ External Access
 ```
 
 ### Key Services:
-- **n8n-main**: Web interface and job dispatcher
-- **n8n-worker**: Job executors (dynamically scaled 1-5 instances)
+- **n8n**: Web interface and job dispatcher
+- **n8n-worker**: Job executors (2 replicas, manually scalable)
 - **n8n-webhook**: Dedicated webhook handler 
-- **n8n-autoscaler**: Custom Python autoscaler monitoring Redis queue
 - **redis**: Job queue (BullMQ)
 - **postgres**: Data persistence
-- **traefik**: Load balancer with automatic SSL
-- **cloudflared**: External access via Cloudflare tunnels
+- **ALB**: AWS Application Load Balancer for external access
 
-## Autoscaler Implementation
+## Worker Scaling
 
-The autoscaler (`autoscaler/autoscaler.py`) implements intelligent scaling logic:
+The system uses 2 worker replicas by default for reliable job processing:
 
-### Scaling Behavior:
-- **Queue Monitoring**: Checks multiple Redis key patterns for BullMQ compatibility
-  - `bull:jobs:wait` (BullMQ v3)
-  - `bull:jobs:waiting` (BullMQ v4+)
-  - `bull:jobs` (fallback)
-- **Scale Up**: When queue length > `SCALE_UP_QUEUE_THRESHOLD` 
-- **Scale Down**: When queue length < `SCALE_DOWN_QUEUE_THRESHOLD`
-- **Incremental Scaling**: One container at a time
-- **Cooldown Protection**: Prevents scaling oscillations
+### Manual Scaling:
+- **Scale Up**: `docker-compose up -d --scale n8n-worker=3`
+- **Scale Down**: `docker-compose up -d --scale n8n-worker=1`
+- **Monitor Queue**: Check Redis queue length to determine if scaling is needed
+- **Queue Commands**: `docker-compose exec redis redis-cli LLEN bull:jobs:wait`
 
-### Configuration (.env):
+### Performance Configuration (.env):
 ```
-MIN_REPLICAS=1
-MAX_REPLICAS=5  
-SCALE_UP_QUEUE_THRESHOLD=5
-SCALE_DOWN_QUEUE_THRESHOLD=1
-POLLING_INTERVAL_SECONDS=10
-COOLDOWN_PERIOD_SECONDS=10
+N8N_CONCURRENCY_PRODUCTION_LIMIT=10
+N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT=300
+N8N_GRACEFUL_SHUTDOWN_TIMEOUT=300
 ```
 
 ## Docker Compose Patterns
@@ -122,11 +113,11 @@ Use the Redis monitor service to observe queue behavior:
 # Check current queue length
 docker-compose exec redis redis-cli LLEN bull:jobs:wait
 
-# Monitor autoscaler decisions
-docker-compose logs -f n8n-autoscaler
+# Monitor n8n main service
+docker-compose logs -f n8n
 
-# Watch queue changes via autoscaler logs
-docker-compose logs -f n8n-autoscaler
+# Monitor worker processes
+docker-compose logs -f n8n-worker
 ```
 
 ## Production Capabilities
