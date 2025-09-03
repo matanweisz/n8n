@@ -140,9 +140,6 @@ QUEUE_HEALTH_CHECK_ACTIVE=true
 ### Step 5: Start Services
 
 ```bash
-# Create external network
-docker network create shark
-
 # Start all services
 docker compose up -d
 
@@ -252,11 +249,11 @@ docker compose exec redis redis-cli info
 # Check logs for errors
 docker compose logs <service-name>
 
-# Verify network exists
-docker network ls | grep shark
-
 # Check disk space
 df -h
+
+# Verify Docker is running
+systemctl status docker
 ```
 
 **Database Connection Failed**

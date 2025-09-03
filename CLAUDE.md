@@ -6,7 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Initial setup
-docker network create shark
 docker compose up -d
 
 # View logs for specific services
