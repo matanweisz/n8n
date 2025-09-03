@@ -2,20 +2,16 @@ version: '3.8'
 
 volumes:
   postgres_data:
-  redis_data:
   n8n_data:
 
 services:
   postgres:
-    image: postgres:17
+    image: postgres:15
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      PGDATA: ${PGDATA}
-      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
-      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,171 +19,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   n8n:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: n8nio/n8n:latest
     restart: unless-stopped
     ports:
       - "5678:5678"
-      - "5679:5679"
     environment:
       # Core Configuration
       - N8N_LOG_LEVEL=${N8N_LOG_LEVEL}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
       
-      # Domain Configuration
+      # Database Configuration  
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      
+      # Basic Configuration
       - N8N_HOST=${N8N_HOST}
       - N8N_PROTOCOL=${N8N_PROTOCOL}
-      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
-      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
-      
-      # Security
       - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE}
-      - N8N_USER_FOLDER=${N8N_USER_FOLDER}
-      
-      # Database Configuration
-      - DB_TYPE=${DB_TYPE}
-      - DB_POSTGRESDB_HOST=${DB_POSTGRESDB_HOST}
-      - DB_POSTGRESDB_DATABASE=${DB_POSTGRESDB_DATABASE}
-      - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER}
-      - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD}
-      
-      # Queue Configuration
-      - EXECUTIONS_MODE=${EXECUTIONS_MODE}
-      - QUEUE_BULL_REDIS_HOST=${QUEUE_BULL_REDIS_HOST}
-      - QUEUE_HEALTH_CHECK_ACTIVE=${QUEUE_HEALTH_CHECK_ACTIVE}
-      
-      # Task Runner Configuration
-      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
-      - N8N_TASK_BROKER_URL=${N8N_TASK_BROKER_URL}
-      - N8N_COMMAND_RESPONSE_URL=${N8N_COMMAND_RESPONSE_URL}
-      - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=${OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS}
-      
-      # Performance
-      - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_CONCURRENCY_PRODUCTION_LIMIT}
-      - N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT=${N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT}
-      - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=${N8N_GRACEFUL_SHUTDOWN_TIMEOUT}
-      
-      # External Dependencies
-      - NODE_FUNCTION_ALLOW_EXTERNAL=${NODE_FUNCTION_ALLOW_EXTERNAL}
-      - PUPPETEER_EXECUTABLE_PATH=${PUPPETEER_EXECUTABLE_PATH}
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5678/healthz || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  n8n-webhook:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    command: n8n webhook
-    environment:
-      # Core Configuration
-      - N8N_LOG_LEVEL=${N8N_LOG_LEVEL}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
-      
-      # Domain Configuration
-      - N8N_HOST=${N8N_HOST}
-      - N8N_PROTOCOL=${N8N_PROTOCOL}
-      - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
-      
-      # Database Configuration
-      - DB_TYPE=${DB_TYPE}
-      - DB_POSTGRESDB_HOST=${DB_POSTGRESDB_HOST}
-      - DB_POSTGRESDB_DATABASE=${DB_POSTGRESDB_DATABASE}
-      - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER}
-      - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD}
-      
-      # Queue Configuration
-      - EXECUTIONS_MODE=${EXECUTIONS_MODE}
-      - QUEUE_BULL_REDIS_HOST=${QUEUE_BULL_REDIS_HOST}
-      - QUEUE_HEALTH_CHECK_ACTIVE=${QUEUE_HEALTH_CHECK_ACTIVE}
-      
-      # Task Runner Configuration
-      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
-      - N8N_TASK_BROKER_URL=${N8N_TASK_BROKER_URL}
-      - N8N_COMMAND_RESPONSE_URL=${N8N_COMMAND_RESPONSE_URL}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    depends_on:
-      n8n:
-        condition: service_healthy
-
-  n8n-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    command: n8n worker
-    stop_grace_period: 5m
-    environment:
-      # Core Configuration
-      - N8N_LOG_LEVEL=${N8N_LOG_LEVEL}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
-      
-      # Database Configuration
-      - DB_TYPE=${DB_TYPE}
-      - DB_POSTGRESDB_HOST=${DB_POSTGRESDB_HOST}
-      - DB_POSTGRESDB_DATABASE=${DB_POSTGRESDB_DATABASE}
-      - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER}
-      - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD}
-      
-      # Queue Configuration
-      - EXECUTIONS_MODE=${EXECUTIONS_MODE}
-      - QUEUE_BULL_REDIS_HOST=${QUEUE_BULL_REDIS_HOST}
-      - QUEUE_HEALTH_CHECK_ACTIVE=${QUEUE_HEALTH_CHECK_ACTIVE}
-      
-      # Task Runner Configuration
-      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
-      - N8N_TASK_BROKER_URL=${N8N_TASK_BROKER_URL}
-      - N8N_COMMAND_RESPONSE_URL=${N8N_COMMAND_RESPONSE_URL}
-      
-      # Performance
-      - N8N_CONCURRENCY_PRODUCTION_LIMIT=${N8N_CONCURRENCY_PRODUCTION_LIMIT}
-      - N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT=${N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT}
-      - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=${N8N_GRACEFUL_SHUTDOWN_TIMEOUT}
-      
-      # External Dependencies
-      - NODE_FUNCTION_ALLOW_EXTERNAL=${NODE_FUNCTION_ALLOW_EXTERNAL}
-      - PUPPETEER_EXECUTABLE_PATH=${PUPPETEER_EXECUTABLE_PATH}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    depends_on:
-      n8n:
-        condition: service_healthy
-    deploy:
-      replicas: 2
-    healthcheck:
-      test: ["CMD-SHELL", "pgrep -f 'n8n worker' || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s

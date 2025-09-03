@@ -2,130 +2,134 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Quick Start
+
+1. Generate security keys:
+```bash
+# Generate a 32-character password for PostgreSQL
+openssl rand -base64 32
+
+# Generate a 32-character encryption key for n8n
+openssl rand -hex 16
+```
+
+2. Update `.env` file with the generated keys
+3. Start the services:
+```bash
+docker compose up -d
+```
+
+4. Access n8n at `http://localhost:5678`
+
 ## Common Development Commands
 
 ```bash
-# Initial setup
+# Start all services
 docker compose up -d
 
-# View logs for specific services
-docker-compose logs n8n
-docker-compose logs n8n-worker
+# View logs
+docker compose logs n8n
+docker compose logs postgres
 
-# Monitor Redis queue
-docker-compose exec redis redis-cli LLEN bull:jobs:wait
-docker-compose exec redis redis-cli LLEN bull:jobs:waiting
+# Check service status
+docker compose ps
 
-# Check service health
-docker-compose ps
-docker-compose exec redis redis-cli ping
+# Restart n8n after configuration changes
+docker compose restart n8n
 
-# Restart services after changes
-docker-compose restart n8n
+# Stop all services
+docker compose down
 
-# Scale workers manually
-docker-compose up -d --scale n8n-worker=3
-
-# Stop and clean up
-docker-compose down
+# Stop and remove all data (WARNING: This deletes all workflows!)
+docker compose down -v
 ```
 
 ## Architecture Overview
 
-This is a **production-ready n8n system** using Docker Compose with queue-based execution. The core architecture:
+This is a **simplified n8n system** using Docker Compose with basic database persistence:
 
 ```
-n8n Main (Web UI) ←→ Redis Queue ←→ n8n Workers (2 replicas)
-      ↓                    ↑              ↑
-PostgreSQL                              n8n Webhook
-      ↓
-ALB (Load Balancer) ←→ External Access
+n8n (Web UI + Executions) ←→ PostgreSQL (Data Storage)
 ```
 
 ### Key Services:
-- **n8n**: Web interface and job dispatcher
-- **n8n-worker**: Job executors (2 replicas, manually scalable)
-- **n8n-webhook**: Dedicated webhook handler 
-- **redis**: Job queue (BullMQ)
-- **postgres**: Data persistence
-- **ALB**: AWS Application Load Balancer for external access
+- **n8n**: Main n8n service (web interface + workflow execution)
+- **postgres**: Database for workflow and execution data
 
-## Worker Scaling
+## Configuration
 
-The system uses 2 worker replicas by default for reliable job processing:
-
-### Manual Scaling:
-- **Scale Up**: `docker-compose up -d --scale n8n-worker=3`
-- **Scale Down**: `docker-compose up -d --scale n8n-worker=1`
-- **Monitor Queue**: Check Redis queue length to determine if scaling is needed
-- **Queue Commands**: `docker-compose exec redis redis-cli LLEN bull:jobs:wait`
-
-### Performance Configuration (.env):
-```
-N8N_CONCURRENCY_PRODUCTION_LIMIT=10
-N8N_QUEUE_BULL_GRACEFULSHUTDOWNTIMEOUT=300
-N8N_GRACEFUL_SHUTDOWN_TIMEOUT=300
-```
-
-## Docker Compose Patterns
-
-### Shared Configuration:
-- Uses `x-n8n` anchor for common n8n service configuration
-- All services connect to external `shark` network
-- Health checks determine startup order and readiness
+### Environment Variables (.env):
+- `POSTGRES_PASSWORD`: Database password (required)
+- `N8N_ENCRYPTION_KEY`: n8n encryption key (required)
+- `POSTGRES_DB`: Database name (default: n8n)
+- `POSTGRES_USER`: Database user (default: n8n)
+- `N8N_PROTOCOL`: Protocol for n8n (default: http)
+- `N8N_HOST`: Host for n8n (default: 0.0.0.0)
+- `N8N_SECURE_COOKIE`: Cookie security (default: false for local)
 
 ### Volume Strategy:
 - **postgres_data**: Database persistence
-- **redis_data**: Queue persistence  
 - **n8n_data**: Workflow and configuration data
 
-### Service Dependencies:
-Services use `depends_on` with health conditions to ensure proper startup sequencing.
+## Initial Setup
 
-## Key Configuration Files
-
-- **.env**: Primary configuration for all services
-- **docker-compose.yml**: Service orchestration and networking
-- **autoscaler/autoscaler.py**: Core scaling logic
-- **monitor/monitor_redis_queue.py**: Queue monitoring utilities
-
-## Security Considerations
-
-All services use environment-based secrets:
-- `N8N_ENCRYPTION_KEY`: Workflow encryption
-- `N8N_USER_MANAGEMENT_JWT_SECRET`: Authentication
-- `N8N_RUNNERS_AUTH_TOKEN`: Worker authentication
-- `POSTGRES_PASSWORD`: Database security
-
-## External Access
-
-The system provides secure external access through:
-- **Webhooks**: `https://webhook.domain.com/webhook/{id}`
-- **Web UI**: `https://n8n.domain.com`
-- **Cloudflare Tunnels**: No port forwarding required
-- **Traefik**: Automatic SSL termination and routing
-
-## Monitoring and Debugging
-
-Use the Redis monitor service to observe queue behavior:
+1. **Clone and navigate to the project:**
 ```bash
-# Check current queue length
-docker-compose exec redis redis-cli LLEN bull:jobs:wait
-
-# Monitor n8n main service
-docker-compose logs -f n8n
-
-# Monitor worker processes
-docker-compose logs -f n8n-worker
+git clone <repository-url>
+cd n8n-project/n8n
 ```
 
-## Production Capabilities
+2. **Generate security keys:**
+```bash
+# PostgreSQL password
+openssl rand -base64 32
+# n8n encryption key  
+openssl rand -hex 16
+```
 
-This system is production-ready with:
-- **Puppeteer Integration**: Chrome/Chromium for web scraping
-- **Multi-worker Scaling**: Handles high-concurrency workloads
-- **Graceful Shutdowns**: Configurable timeout for job completion
-- **Health Monitoring**: All critical services have health checks
-- **Network Isolation**: Internal Docker networking for security
+3. **Update .env file:**
+Replace the placeholder values in `.env`:
+- Set `POSTGRES_PASSWORD` to your generated password
+- Set `N8N_ENCRYPTION_KEY` to your generated encryption key
 
-The system has been validated to handle "hundreds of simultaneous executions" on an 8-core, 16GB RAM VPS.
+4. **Start services:**
+```bash
+docker compose up -d
+```
+
+5. **Access n8n:**
+Open http://localhost:5678 in your browser
+
+6. **First-time setup:**
+Create your admin user account when prompted
+
+## Troubleshooting
+
+### Service Health Check:
+```bash
+# Check if services are running
+docker compose ps
+
+# Check service logs
+docker compose logs n8n
+docker compose logs postgres
+```
+
+### Common Issues:
+- **Port 5678 not accessible**: Ensure no other service is using the port
+- **Database connection errors**: Check PostgreSQL is healthy with `docker compose logs postgres`
+- **n8n won't start**: Verify `.env` file has proper encryption key and database password
+
+### Reset Everything:
+```bash
+# This will delete ALL data and workflows
+docker compose down -v
+docker compose up -d
+```
+
+## Security Notes
+
+- This simplified setup is intended for development/testing
+- Uses HTTP instead of HTTPS (suitable for private networks)
+- For production use, enable HTTPS and use proper domain configuration
+- Always use strong, unique passwords and encryption keys
