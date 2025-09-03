@@ -1,7 +1,9 @@
 #!/bin/bash
+
 # =============================================================================
 # N8N AWS Deployment Script
 # =============================================================================
+
 set -e # Exit on any error
 
 echo "🚀 Starting N8N deployment on AWS EC2..."
@@ -62,5 +64,5 @@ sudo systemctl start docker
 echo "🎯 Starting N8N services..."
 sudo docker compose up -d
 
-echo "✅ N8N deployment completed!"
-echo "Access N8N at: https://n8n.matanweisz.xyz"
+echo "✅ N8N Deployment Completed!"
+echo "Access N8N: https://n8n.matanweisz.xyz"
