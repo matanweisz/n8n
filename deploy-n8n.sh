@@ -62,7 +62,30 @@ sudo systemctl start docker
 
 # Start N8N services
 echo "🎯 Starting N8N services..."
-sudo docker compose up -d
+docker compose up -d
+
+# Wait for services to be healthy
+echo "⏳ Waiting for services to become healthy..."
+sleep 30
+
+# Check service status
+echo "📊 Service Status:"
+docker compose ps
+
+# Test local health endpoint
+echo "🏥 Testing health endpoint..."
+if curl -f http://localhost:5678/healthz >/dev/null 2>&1; then
+    echo "✅ N8N health check passed"
+else
+    echo "⚠️  N8N health check failed - check logs with: docker compose logs n8n"
+fi
 
 echo "✅ N8N Deployment Completed!"
-echo "Access N8N: https://n8n.matanweisz.xyz"
+echo ""
+echo "🌐 Access N8N: https://n8n.matanweisz.xyz"
+echo "🔗 Webhooks will be available at: https://n8n.matanweisz.xyz/webhook/*"
+echo ""
+echo "📝 Useful commands:"
+echo "  - View logs: docker compose logs -f n8n"
+echo "  - Restart n8n: docker compose restart n8n"
+echo "  - Check status: docker compose ps"

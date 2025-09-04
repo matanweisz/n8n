@@ -35,10 +35,13 @@ services:
       - DB_POSTGRESDB_USER=${POSTGRES_USER}
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
 
-      # Basic Configuration
+      # ALB/Production Configuration
       - N8N_HOST=${N8N_HOST}
       - N8N_PROTOCOL=${N8N_PROTOCOL}
+      - N8N_PORT=5678
+      - WEBHOOK_URL=${WEBHOOK_URL}
       - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
